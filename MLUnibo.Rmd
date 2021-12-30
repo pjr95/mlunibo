@@ -1,0 +1,130 @@
+---
+title: "Machine Learning"
+author: 
+  - Bach, Helena ^[Università di Bologna, xxx]
+  - Fleming, María^[Università di Bologna, xxx]
+  - Karampelas, Petro^[Università di Bologna, xxx]
+  - Romero, Pablo José^[Universidad Nacional de Córdoba, xxx]
+date: "30/12/2021"
+output:
+  pdf_document:
+    extra_dependencies: ["float"]
+    number_sections: False
+header-includes:
+  \usepackage{floatrow}
+  \floatsetup[figure]{capposition=top}
+  \usepackage[font={large}]{caption}
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.pos = "H", out.extra = "")
+```
+
+# Introduction
+
+|   In this document the following R packages are made use of:
+
+```{r packages, warning=FALSE, message=FALSE}
+
+library(corrplot)
+library(caTools)
+library(biotools)
+library(ggplot2)
+library(MASS)
+library(xtable)
+library(dplyr)
+library(tidyr)
+library(caret)
+library(kableExtra)
+
+```
+
+# Descriptive Analysis
+
+|   The data set used in this project collects information about a Portuguese bank marketing campaign aiming to get customers to subscribe to a term deposit. The data set contains 45.211 observations and 17 different variables: 11 categorical and 6 numerical.
+|   Firs of all, the data will be uploaded, the variables classified, the train and test sample created and a exploratory analysis will be done.
+
+```{r exploratoryAnalysis}
+
+bank <- read.csv(file="bank-full.csv", header=TRUE, sep=";")
+summary(bank)
+str(bank)
+
+#variables that should be treated as categorical
+
+bank$marital <- as.factor(bank$marital)
+bank$education <- as.factor(bank$education)
+bank$default <- as.factor(bank$default)
+bank$housing <- as.factor(bank$housing)
+bank$job <- as.factor(bank$job)
+bank$y <- as.factor(bank$y)
+
+#create test and training sample
+
+set.seed(101)
+sample = sample.split(bank[,1], SplitRatio = .75)
+train <- bank[sample, ]
+test <- bank[-sample, ]
+
+```
+
+Figure \ref{fig:boxplot} shows the box plot of the numerical variables. It can be noticed that \emph{age} follows a very similar distribution for clients who subscribed to a term deposit and for those who did not, indicating that the age of the customer won't play a significant role when predicting the behavior of clients. On the other hand, from the box-plot of \emph{duration} it can be inferred that high duration (long contact duration in second) might have a positive impact on the subscription rate. 
+
+```{r boxplot, dev='png', fig.cap="\\label{fig:boxplot}Boxplot", fig.height=8}
+#########DESCRIPTIVE ANALYSIS#########
+
+par(mfrow=c(3,2))
+boxplot(age ~ y, data = bank, main="Age")
+boxplot(balance ~ y, data = bank, main="Balance")
+boxplot(day ~ y, data = bank, main="Day")
+boxplot(duration ~ y, data = bank, main="Duration")
+boxplot(pdays ~ y, data = bank, main="Pdays")
+boxplot(previous ~ y, data = bank, main="Previous")
+
+```
+
+# Logit
+
+|   The logistic regression models the probability of belonging to one class, under the assumption that the dependent variable follows a binomial distribution. It is a classification technique that allows to predict a dichotomous variable. 
+
+Given $X$ (explanatory variables) we can represent the probability  that the client has subscribed to a term deposit (Y) as $p(X)=P(y=yes|X)$, using the logistic function to ensure that the output lies between 0 and 1.
+
+\begin{center}
+$p(X)=\frac{e^{\beta_0+\beta_1 \cdot X}}{1+e^{\beta_0 + \beta_1\cdot X}}$
+\end{center}
+
+```{r logitmod}
+
+mylogit <-  glm(y ~., data = train,
+                family = "binomial")
+
+tabl <- summary(mylogit)
+
+kable(tabl$coefficients,
+      caption = "\\label{fig:logit}Logit summary",
+      format ="latex", 
+      align = "c",
+      table.envir = "figure")
+
+```
+
+
+From Table \ref{fig:logit} (included in the annex) it can be inferred which variables are significant when determining the outcome of the term deposit subscription. Working as a housemaid, entrepreneur, manual labor or being self-employed has a significant negative effect on the probability of subscribing to the term deposit, while being retired or a student increases the probability. In terms of education, completing  a secondary or tertiary level of education, increases the probability of subscribing. Clients who are married, have a housing or personal loan are less likely to subscribe to the term deposit. Accounts with  a large average yearly balance have higher odds of accepting the marketing offer. In line with Figure \ref{fig:boxplot}, duration has a positive significant effect, so clients that were contacted for a longer time (seconds) are more likely to subscribe.
+
+To evaluate the performance of the logistic model defined previously, we create a confusion matrix. The confusion matrix compares the predicted values obtained from the model to the actual values.
+
+```{r prediclogit}
+
+probabilities <- mylogit %>% predict(test, type = "response")
+test$predicted <- ifelse(probabilities > 0.5, 'yes', 'no')
+
+#Confusion matrix
+cmatrix <- confusionMatrix(table(test$y, test$predicted))
+                           
+kable(cmatrix$table,
+      caption = "\\label{fig:confmat}Confusion Matrix",
+      format ="latex", 
+      align = "c",
+      table.envir = "figure")
+```
